@@ -11,59 +11,92 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
-  // Flag used to prevent showing an alert when addTask is invoked automatically on load
-  let isInitialLoad = true;
+  // In-memory array of tasks (strings) to keep state and sync with localStorage
+  let tasks = [];
 
-  // Function: addTask
-  // - Reads the trimmed input value
-  // - Alerts the user if empty (except during initial load)
-  // - Creates an li with the task text and a Remove button
-  // - Appends the li to the task list and clears the input
-  function addTask() {
-    // Retrieve and trim the value from the input field
-    const taskText = taskInput.value.trim();
-
-    // If the task text is empty
-    if (taskText === '') {
-      // During initial automatic invocation on DOMContentLoaded, do not alert
-      if (isInitialLoad) {
-        isInitialLoad = false;
-        return;
-      }
-
-      // Prompt the user to enter a task
-      alert('Please enter a task');
-      return;
+  // Save the current tasks array to Local Storage
+  function saveTasks() {
+    try {
+      localStorage.setItem('tasks', JSON.stringify(tasks));
+    } catch (err) {
+      console.error('Failed to save tasks to localStorage', err);
     }
+  }
 
-    // Create a new list item and set its text
+  // Create a task element in the DOM for a given task text
+  function createTaskElement(taskText) {
     const li = document.createElement('li');
     li.textContent = taskText;
+    // Store original text in a data attribute for reliable removal
+    li.dataset.task = taskText;
 
-    // Create a remove button for the task
     const removeBtn = document.createElement('button');
     removeBtn.textContent = 'Remove';
     removeBtn.className = 'remove-btn';
 
-    // When the remove button is clicked, remove the corresponding li from the list
+    // Remove handler: remove from DOM and from tasks array, then save
     removeBtn.onclick = () => {
       if (li.parentElement === taskList) {
         taskList.removeChild(li);
       }
+
+      const idx = tasks.indexOf(taskText);
+      if (idx > -1) {
+        tasks.splice(idx, 1);
+        saveTasks();
+      }
     };
 
-    // Append the button to the list item and the item to the list
     li.appendChild(removeBtn);
+    return li;
+  }
+
+  // Load tasks from Local Storage and populate the DOM
+  function loadTasks() {
+    try {
+      const storedTasks = JSON.parse(localStorage.getItem('tasks') || '[]');
+      if (Array.isArray(storedTasks)) {
+        tasks = storedTasks.slice(); // copy into our in-memory array
+        storedTasks.forEach((t) => {
+          const li = createTaskElement(t);
+          taskList.appendChild(li);
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load tasks from localStorage', err);
+    }
+  }
+
+  // Function: addTask
+  // - If taskTextArg is provided, use it; otherwise read from input
+  // - Optionally save the task to Local Storage (save === true)
+  function addTask(taskTextArg, save = true) {
+    const raw = typeof taskTextArg === 'string' ? taskTextArg : taskInput.value;
+    const taskText = (raw || '').trim();
+
+    // If the task text is empty, alert the user only when this is a user-triggered add
+    if (taskText === '') {
+      if (save) {
+        alert('Please enter a task');
+      }
+      return;
+    }
+
+    // Create and append the task element
+    const li = createTaskElement(taskText);
     taskList.appendChild(li);
 
-    // Clear the input field and reset the initial-load flag
-    taskInput.value = '';
-    isInitialLoad = false;
+    // Update in-memory array and Local Storage when needed
+    if (save) {
+      tasks.push(taskText);
+      saveTasks();
+      taskInput.value = '';
+    }
   }
 
   // Attach event listener to the Add button (if it exists)
   if (addButton) {
-    addButton.addEventListener('click', addTask);
+    addButton.addEventListener('click', () => addTask());
   }
 
   // Allow adding a task by pressing Enter in the input field
@@ -73,6 +106,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Invoke addTask on DOMContentLoaded as requested (safe because of the initial-load flag)
-  addTask();
+  // Load tasks from Local Storage when the page loads
+  loadTasks();
 });
